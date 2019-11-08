@@ -90,12 +90,14 @@ func main() {
 			log.Fatalf("no files to extract specified; specify either FILE or -a")
 		}
 		if len(listfilePath) > 0 {
+			fmt.Println("getting file paths from listfile")
 			files, err := getFilePathsFromListfile(archives, listfilePath)
 			if err != nil {
 				log.Fatalf("%+v", err)
 			}
 			filePaths = files
 		} else {
+			fmt.Println("getting file paths from embedded (listfile)")
 			files, err := getFilePathsFromEmbeddedListfile(archives)
 			if err != nil {
 				log.Fatalf("%+v", err)
