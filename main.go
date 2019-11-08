@@ -106,6 +106,11 @@ func main() {
 		}
 	}
 
+	// De-normalize file paths.
+	for i, filePath := range filePaths {
+		filePaths[i] = denormalize(filePath)
+	}
+
 	// Extract files.
 	if err := extractAllFiles(archives, filePaths); err != nil {
 		log.Fatalf("%+v", err)
@@ -123,6 +128,7 @@ func getFilePathsFromListfile(archives []mpq.MPQ, listfilePath string) ([]string
 	var filePaths []string
 	for s.Scan() {
 		filePath := s.Text()
+		filePath = denormalize(filePath)
 		for _, archive := range archives {
 			if archive.FileExists(filePath) {
 				filePaths = append(filePaths, filePath)
@@ -228,6 +234,16 @@ func archiveReadFile(archive mpq.MPQ, filePath string) (data []byte, err error) 
 // slash.
 func normalize(filePath string) string {
 	filePath = strings.ReplaceAll(filePath, `\`, "/")
+	return filePath
+}
+
+// denormalize de-normalizes the file path by replacing slash characters with
+// backslashes and removing any leading slash prefix.
+func denormalize(filePath string) string {
+	filePath = strings.ReplaceAll(filePath, "/", `\`)
+	if strings.HasPrefix(filePath, `\`) {
+		filePath = filePath[len(`\`):]
+	}
 	return filePath
 }
 
