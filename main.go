@@ -90,7 +90,7 @@ func main() {
 			log.Fatalf("no files to extract specified; specify either FILE or -a")
 		}
 		if len(listfilePath) > 0 {
-			fmt.Println("getting file paths from listfile")
+			fmt.Printf("getting file paths from listfile %q\n", listfilePath)
 			files, err := getFilePathsFromListfile(archives, listfilePath)
 			if err != nil {
 				log.Fatalf("%+v", err)
