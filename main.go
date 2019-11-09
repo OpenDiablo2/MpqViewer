@@ -22,11 +22,14 @@ Extracts files from MPQ archives.
 Usage:
 	MpqViewer [OPTION]... [FILE.mpq]...
 
+Example (extract all files specified in the bundled "Diablo II LOD.txt" listfile):
+	MpqViewer -a -mpq_dir /path/to/diablo_ii
+
 Example (extract all files specified in the listfile):
 	MpqViewer -a -l listfile.txt -mpq_dir /path/to/diablo_ii
 
 Example (extract all files specified in the embedded (listfile) of each MPQ archive):
-	MpqViewer -a -mpq_dir /path/to/diablo_ii
+	MpqViewer -a -embedded -mpq_dir /path/to/diablo_ii
 
 Example (extract specific files from d2data.mpq):
 	MpqViewer -files "/data/global/excel/books.txt,/data/global/excel/charstats.txt" /path/to/d2data.mpq
@@ -44,6 +47,8 @@ func main() {
 	var (
 		// Extract all files.
 		all bool
+		// Use embedded (listfile) to locate files in MPQ archives.
+		embedded bool
 		// Path to Diablo II MPQ directory.
 		mpqDir string
 		// Path to listfile.txt
@@ -55,6 +60,7 @@ func main() {
 	flag.StringVar(&listfilePath, "l", "listfile.txt", "path to listfile")
 	flag.StringVar(&rawFilePaths, "files", "", "comma-separated list of files to extract")
 	flag.BoolVar(&all, "a", false, "extract all files")
+	flag.BoolVar(&embedded, "embedded", false, "use embedded (listfile) to locate files in MPQ archives")
 	flag.Parse()
 
 	// Get MPQ paths.
@@ -89,7 +95,14 @@ func main() {
 		if !all {
 			log.Fatalf("no files to extract specified; specify either FILE or -a")
 		}
-		if len(listfilePath) > 0 {
+		if embedded {
+			fmt.Println("getting file paths from embedded (listfile)")
+			files, err := getFilePathsFromEmbeddedListfile(archives)
+			if err != nil {
+				log.Fatalf("%+v", err)
+			}
+			filePaths = files
+		} else if len(listfilePath) > 0 {
 			fmt.Printf("getting file paths from listfile %q\n", listfilePath)
 			files, err := getFilePathsFromListfile(archives, listfilePath)
 			if err != nil {
@@ -97,8 +110,11 @@ func main() {
 			}
 			filePaths = files
 		} else {
-			fmt.Println("getting file paths from embedded (listfile)")
-			files, err := getFilePathsFromEmbeddedListfile(archives)
+			// Use bundled "Diablo II LOD.txt" listfile of Zezula's MPQ Editor.
+			//
+			// ref: http://www.zezula.net/download/listfiles.zip
+			fmt.Println(`getting file paths from bundled "Diablo II LOD.txt" listfile of Zezula's MPQ Editor`)
+			files, err := getFilePathsFromBundledListfile(archives, rawListfile)
 			if err != nil {
 				log.Fatalf("%+v", err)
 			}
@@ -125,6 +141,25 @@ func getFilePathsFromListfile(archives []mpq.MPQ, listfilePath string) ([]string
 		return nil, errors.WithStack(err)
 	}
 	s := bufio.NewScanner(bytes.NewReader(buf))
+	var filePaths []string
+	for s.Scan() {
+		filePath := s.Text()
+		filePath = denormalize(filePath)
+		for _, archive := range archives {
+			if archive.FileExists(filePath) {
+				filePaths = append(filePaths, filePath)
+				break
+			}
+		}
+	}
+	return filePaths, nil
+}
+
+// getFilePathsFromBundledListfile returns the list of file paths contained
+// within the bundled "Diablo II LOD.txt" listfile of Zezula's MPQ Editor which
+// are present in any of the MPQ archives.
+func getFilePathsFromBundledListfile(archives []mpq.MPQ, data string) ([]string, error) {
+	s := bufio.NewScanner(strings.NewReader(data))
 	var filePaths []string
 	for s.Scan() {
 		filePath := s.Text()
