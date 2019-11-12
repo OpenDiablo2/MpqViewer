@@ -61,7 +61,7 @@ func main() {
 	flag.BoolVar(&all, "a", false, "extract all files")
 	flag.BoolVar(&embedded, "embedded", false, "use embedded (listfile) to locate files in MPQ archives")
 	flag.StringVar(&rawFilePaths, "files", "", "comma-separated list of files to extract")
-	flag.StringVar(&listfilePath, "l", "listfile.txt", "path to listfile")
+	flag.StringVar(&listfilePath, "l", "", "path to listfile")
 	flag.BoolVar(&lower, "lower", false, "use lowercase for output file paths")
 	flag.StringVar(&mpqDir, "mpq_dir", ".", "path to Diablo II MPQ directory")
 	flag.Parse()
