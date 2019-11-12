@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/OpenDiablo2/OpenDiablo2/mpq"
+	"github.com/OpenDiablo2/OpenDiablo2/d2data/d2mpq"
 	"github.com/mewkiz/pkg/pathutil"
 	"github.com/pkg/errors"
 )
@@ -49,18 +49,21 @@ func main() {
 		all bool
 		// Use embedded (listfile) to locate files in MPQ archives.
 		embedded bool
-		// Path to Diablo II MPQ directory.
-		mpqDir string
-		// Path to listfile.txt
-		listfilePath string
 		// Comma-separated list of files to extract.
 		rawFilePaths string
+		// Path to listfile.txt
+		listfilePath string
+		// Use lowercase for output file paths.
+		lower bool
+		// Path to Diablo II MPQ directory.
+		mpqDir string
 	)
-	flag.StringVar(&mpqDir, "mpq_dir", ".", "path to Diablo II MPQ directory")
-	flag.StringVar(&listfilePath, "l", "listfile.txt", "path to listfile")
-	flag.StringVar(&rawFilePaths, "files", "", "comma-separated list of files to extract")
 	flag.BoolVar(&all, "a", false, "extract all files")
 	flag.BoolVar(&embedded, "embedded", false, "use embedded (listfile) to locate files in MPQ archives")
+	flag.StringVar(&rawFilePaths, "files", "", "comma-separated list of files to extract")
+	flag.StringVar(&listfilePath, "l", "", "path to listfile")
+	flag.BoolVar(&lower, "lower", false, "use lowercase for output file paths")
+	flag.StringVar(&mpqDir, "mpq_dir", ".", "path to Diablo II MPQ directory")
 	flag.Parse()
 
 	// Get MPQ paths.
@@ -74,12 +77,12 @@ func main() {
 	}
 
 	// Initialize MPQ hash table.
-	mpq.InitializeCryptoBuffer()
+	d2mpq.InitializeCryptoBuffer()
 
 	// Open MPQ archives.
-	var archives []mpq.MPQ
+	var archives []*d2mpq.MPQ
 	for _, mpqPath := range mpqPaths {
-		archive, err := mpq.Load(mpqPath)
+		archive, err := d2mpq.Load(mpqPath)
 		if err != nil {
 			log.Fatalf("%+v", errors.WithStack(err))
 		}
@@ -128,14 +131,14 @@ func main() {
 	}
 
 	// Extract files.
-	if err := extractAllFiles(archives, filePaths); err != nil {
+	if err := extractAllFiles(archives, filePaths, lower); err != nil {
 		log.Fatalf("%+v", err)
 	}
 }
 
 // getFilePathsFromListfile returns the list of file paths contained within the
 // given listfile which are present in any of the MPQ archives.
-func getFilePathsFromListfile(archives []mpq.MPQ, listfilePath string) ([]string, error) {
+func getFilePathsFromListfile(archives []*d2mpq.MPQ, listfilePath string) ([]string, error) {
 	buf, err := ioutil.ReadFile(listfilePath)
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -158,7 +161,7 @@ func getFilePathsFromListfile(archives []mpq.MPQ, listfilePath string) ([]string
 // getFilePathsFromBundledListfile returns the list of file paths contained
 // within the bundled "Diablo II LOD.txt" listfile of Zezula's MPQ Editor which
 // are present in any of the MPQ archives.
-func getFilePathsFromBundledListfile(archives []mpq.MPQ, data string) ([]string, error) {
+func getFilePathsFromBundledListfile(archives []*d2mpq.MPQ, data string) ([]string, error) {
 	s := bufio.NewScanner(strings.NewReader(data))
 	var filePaths []string
 	for s.Scan() {
@@ -176,7 +179,7 @@ func getFilePathsFromBundledListfile(archives []mpq.MPQ, data string) ([]string,
 
 // getFilePathsFromEmbeddedListfile returns the list of file paths contained
 // within the embedded (listfile) of each MPQ archive.
-func getFilePathsFromEmbeddedListfile(archives []mpq.MPQ) ([]string, error) {
+func getFilePathsFromEmbeddedListfile(archives []*d2mpq.MPQ) ([]string, error) {
 	var filePaths []string
 	for _, archive := range archives {
 		files, err := archive.GetFileList()
@@ -190,9 +193,9 @@ func getFilePathsFromEmbeddedListfile(archives []mpq.MPQ) ([]string, error) {
 
 // extractAllFiles extracts all files specified by file path from the MPQ
 // archives.
-func extractAllFiles(archives []mpq.MPQ, filePaths []string) error {
+func extractAllFiles(archives []*d2mpq.MPQ, filePaths []string, lower bool) error {
 	for _, filePath := range filePaths {
-		if err := extractFile(archives, filePath); err != nil {
+		if err := extractFile(archives, filePath, lower); err != nil {
 			switch errors.Cause(err) {
 			case ErrNotFound:
 				log.Printf("file not found %q\n", filePath)
@@ -209,7 +212,7 @@ func extractAllFiles(archives []mpq.MPQ, filePaths []string) error {
 
 // extractFile extracts the file from first MPQ archive containing the file
 // path.
-func extractFile(archives []mpq.MPQ, filePath string) error {
+func extractFile(archives []*d2mpq.MPQ, filePath string, lower bool) error {
 	fmt.Printf("extracting %q\n", filePath)
 	data, archiveName, err := readFile(archives, filePath)
 	if err != nil {
@@ -217,6 +220,9 @@ func extractFile(archives []mpq.MPQ, filePath string) error {
 	}
 	archiveDir := pathutil.FileName(archiveName)
 	dstPath := normalize(filepath.Join("_dump_", archiveDir, filePath))
+	if lower {
+		dstPath = strings.ToLower(dstPath)
+	}
 	fmt.Printf("creating: %q\n", dstPath)
 	dir := filepath.Dir(dstPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -230,7 +236,7 @@ func extractFile(archives []mpq.MPQ, filePath string) error {
 
 // readFile reads the contents of the given file from the first MPQ archive
 // containing the file path.
-func readFile(archives []mpq.MPQ, filePath string) ([]byte, string, error) {
+func readFile(archives []*d2mpq.MPQ, filePath string) ([]byte, string, error) {
 	// de-normalize file name.
 	filePath = strings.ToLower(filePath)
 	filePath = strings.ReplaceAll(filePath, `/`, "\\")
@@ -252,7 +258,7 @@ func readFile(archives []mpq.MPQ, filePath string) ([]byte, string, error) {
 }
 
 // archiveReadFile reads the contents of the given file from the MPQ archive.
-func archiveReadFile(archive mpq.MPQ, filePath string) (data []byte, err error) {
+func archiveReadFile(archive *d2mpq.MPQ, filePath string) (data []byte, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = errors.Wrap(ErrFileRead, fmt.Sprint(e))
